@@ -227,7 +227,7 @@ def serve_app():
 @limiter.limit("10/minute")          # tight limit to block brute-force
 async def verify_pin(request: Request, body: PinRequest):
     """Let the frontend verify the PIN server-side without exposing it in JS."""
-    if body.pin != APP_PIN:
+    if body.pin.strip() != APP_PIN.strip():
         raise HTTPException(status_code=401, detail="Wrong PIN")
     return {"ok": True}
 

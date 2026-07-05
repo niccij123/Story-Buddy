@@ -115,36 +115,28 @@ function unlockApp() {
 
 pinSubmit.addEventListener('click', () => checkPin());
 async function checkPin() {
-  const entered = pinInput.value;
+  const entered = pinInput.value.trim();
   if (!entered) return;
-
   pinSubmit.disabled = true;
+  pinError.hidden = true;
 
   try {
-    let ok = false;
-
-    try {
-      // Always verify via the backend using a relative URL (same origin on Railway,
-      // http://localhost:8000 for local dev when the backend is running).
-      const url = API_BASE ? `${API_BASE}/api/verify-pin` : '/api/verify-pin';
-      const res = await fetch(url, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ pin: entered }),
-      });
-      ok = res.ok;   // 200 = correct, 401 = wrong, anything else treated as wrong
-    } catch {
-      // Backend unreachable (local static dev without server) — fall back to default PIN
-      ok = (entered === PIN);
+    const res = await fetch('/api/verify-pin', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ pin: entered }),
+    });
+    if (res.ok) {
+      unlockApp();
+    } else {
+      pinError.textContent = 'Wrong PIN — try again.';
+      pinError.hidden = false;
+      pinInput.value  = '';
+      pinInput.focus();
     }
-
-    if (!ok) throw new Error('wrong');
-    pinError.hidden = true;
-    unlockApp();
   } catch {
+    pinError.textContent = 'Cannot reach the server — try refreshing.';
     pinError.hidden = false;
-    pinInput.value  = '';
-    pinInput.focus();
   } finally {
     pinSubmit.disabled = false;
   }
