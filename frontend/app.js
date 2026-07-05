@@ -123,24 +123,18 @@ async function checkPin() {
   try {
     let ok = false;
 
-    if (API_BASE) {
-      // Try server-side verification first (FastAPI injects API_BASE = '').
-      // Falls back to client-side if the server is unreachable (local static dev).
-      try {
-        const res = await fetch(`${API_BASE}/api/verify-pin`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ pin: entered }),
-        });
-        if (res.status === 401) { ok = false; }
-        else if (!res.ok)       { throw new Error('network'); } // unexpected → fallback
-        else                    { ok = true; }
-      } catch (netErr) {
-        if (netErr.message === 'network') throw netErr;
-        // Network unreachable (local static serving) — fall back to injected/default PIN
-        ok = (entered === PIN);
-      }
-    } else {
+    try {
+      // Always verify via the backend using a relative URL (same origin on Railway,
+      // http://localhost:8000 for local dev when the backend is running).
+      const url = API_BASE ? `${API_BASE}/api/verify-pin` : '/api/verify-pin';
+      const res = await fetch(url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ pin: entered }),
+      });
+      ok = res.ok;   // 200 = correct, 401 = wrong, anything else treated as wrong
+    } catch {
+      // Backend unreachable (local static dev without server) — fall back to default PIN
       ok = (entered === PIN);
     }
 
