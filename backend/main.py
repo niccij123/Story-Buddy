@@ -212,8 +212,8 @@ def health():
 def _app_html() -> str:
     html = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
     # Hide the pin gate and show the app directly — no client-side toggle needed
-    html = html.replace('<div id="pin-gate"', '<div id="pin-gate" hidden', 1)
-    html = html.replace('<div id="app" class="app" hidden', '<div id="app" class="app"', 1)
+    html = html.replace('<div id="pin-gate" class="pin-gate">', '<div id="pin-gate" class="pin-gate" style="display:none">', 1)
+    html = html.replace('<div id="app" class="app" hidden>', '<div id="app" class="app">', 1)
     return html
 
 
