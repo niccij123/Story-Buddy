@@ -117,6 +117,7 @@ pinSubmit.addEventListener('click', () => checkPin());
 async function checkPin() {
   const entered = pinInput.value.trim();
   if (!entered) return;
+  pinSubmit.textContent = 'Checking…';
   pinSubmit.disabled = true;
   pinError.hidden = true;
 
@@ -127,18 +128,20 @@ async function checkPin() {
       body:    JSON.stringify({ pin: entered }),
     });
     if (res.ok) {
+      pinSubmit.textContent = 'OK!';
       unlockApp();
     } else {
-      pinError.textContent = 'Wrong PIN — try again.';
+      pinError.textContent = `Wrong PIN (server said ${res.status}) — try again.`;
       pinError.hidden = false;
       pinInput.value  = '';
       pinInput.focus();
     }
-  } catch {
-    pinError.textContent = 'Cannot reach the server — try refreshing.';
+  } catch (err) {
+    pinError.textContent = `Server error: ${err.message} — try refreshing.`;
     pinError.hidden = false;
   } finally {
     pinSubmit.disabled = false;
+    pinSubmit.textContent = "Let's go";
   }
 }
 
