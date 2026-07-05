@@ -234,20 +234,27 @@ def pin_page():
       <div class="pin-logo">📖</div>
       <h1>Story Buddy</h1>
       <p>Enter the family PIN to start writing.</p>
-      <input id="pin-input" type="password" inputmode="numeric"
-             placeholder="PIN" autocomplete="off" maxlength="12"/>
-      <button id="pin-submit" class="btn-primary">Let's go</button>
+      <form id="pin-form" method="post" action="/api/verify-pin" autocomplete="off">
+        <input id="pin-input" name="pin" type="text" inputmode="numeric"
+               placeholder="PIN" autocomplete="off" maxlength="12"
+               style="letter-spacing:0.2em; -webkit-text-security:disc; text-security:disc;"/>
+        <button type="submit" class="btn-primary">Let's go</button>
+      </form>
       <p id="pin-error" class="pin-error" hidden>Wrong PIN — try again.</p>
     </div>
   </div>
   <script>
-    const btn   = document.getElementById('pin-submit');
+    // Form submits as application/x-www-form-urlencoded but backend expects JSON.
+    // Intercept, POST JSON, let the server 303-redirect on success.
+    const form  = document.getElementById('pin-form');
     const input = document.getElementById('pin-input');
     const err   = document.getElementById('pin-error');
 
-    async function tryPin() {
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
       const pin = input.value.trim();
       if (!pin) return;
+      const btn = form.querySelector('button');
       btn.disabled = true;
       btn.textContent = 'Checking…';
       err.hidden = true;
@@ -256,9 +263,10 @@ def pin_page():
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({pin}),
+          redirect: 'follow',
         });
-        if (res.ok) {
-          window.location.href = '/app';
+        if (res.ok || res.redirected) {
+          window.location.replace(res.url || '/app');
         } else {
           err.hidden = false;
           input.value = '';
@@ -271,10 +279,7 @@ def pin_page():
         btn.disabled = false;
         btn.textContent = "Let's go";
       }
-    }
-
-    btn.addEventListener('click', tryPin);
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') tryPin(); });
+    });
   </script>
 </body>
 </html>""")
@@ -294,7 +299,7 @@ def serve_app(request: Request):
 async def verify_pin(request: Request, body: PinRequest):
     if body.pin.strip() != APP_PIN.strip():
         raise HTTPException(status_code=401, detail="Wrong PIN")
-    response = HTMLResponse('{"ok":true}', media_type="application/json")
+    response = RedirectResponse("/app", status_code=303)
     response.set_cookie(
         key="sb_verified", value="1",
         httponly=True, samesite="lax", secure=True,
