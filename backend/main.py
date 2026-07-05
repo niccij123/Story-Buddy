@@ -285,7 +285,7 @@ async def chat(request: Request, body: ChatRequest):
 
 # ── Static files (must come last — catches everything not matched above) ───────
 # Serves style.css, app.js, and any other assets from the frontend directory.
-app.mount("/", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 
 if __name__ == "__main__":
