@@ -114,6 +114,7 @@ class ChatRequest(BaseModel):
     messages: list[Message]
     mode: str = "brainstorm"  # "brainstorm" | "cowrite"
     story_bible: StoryBible = StoryBible()
+    story_body: str = ""
 
 
 class StoryBibleUpdate(BaseModel):
@@ -132,7 +133,7 @@ class ChatResponse(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def build_system_prompt(mode: str, story_bible: StoryBible) -> str:
+def build_system_prompt(mode: str, story_bible: StoryBible, story_body: str = "") -> str:
     parts = [SYSTEM_PROMPT]
     parts.append(f"\n\n## Current mode\n{mode.upper()}")
 
@@ -149,6 +150,9 @@ def build_system_prompt(mode: str, story_bible: StoryBible) -> str:
 
     if bible_lines:
         parts.append("\n\n## Story bible (established so far)\n" + "\n".join(bible_lines))
+
+    if story_body.strip():
+        parts.append(f"\n\n## Story so far (what the child has written)\n{story_body.strip()}")
 
     return "\n".join(parts)
 
@@ -278,7 +282,7 @@ async def chat(request: Request, body: ChatRequest):
     if body.mode not in ("brainstorm", "cowrite"):
         raise HTTPException(status_code=400, detail="mode must be 'brainstorm' or 'cowrite'")
 
-    system   = build_system_prompt(body.mode, body.story_bible)
+    system   = build_system_prompt(body.mode, body.story_bible, body.story_body)
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
 
     try:

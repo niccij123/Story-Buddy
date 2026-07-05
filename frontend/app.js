@@ -151,6 +151,7 @@ async function sendToBackend() {
         messages:    chatHistory,
         mode:        currentMode,
         story_bible: storyBible,
+        story_body:  storyBody.value,
       }),
     });
 
