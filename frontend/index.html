@@ -29,7 +29,8 @@
 
       <div class="doc-header">
         <input id="story-title" class="story-title" type="text"
-               placeholder="Give your story a title…" aria-label="Story title" />
+               placeholder="Give your story a title…" aria-label="Story title"
+               autocapitalize="words" />
         <span id="save-indicator" class="save-indicator" aria-live="polite"></span>
         <button id="stories-btn" class="btn-stories" aria-label="My stories">📚 My Stories</button>
       </div>
@@ -43,7 +44,8 @@
 
       <textarea id="story-body" class="story-body"
                 placeholder="Start writing your story here…"
-                aria-label="Story text" spellcheck="true"></textarea>
+                aria-label="Story text" spellcheck="true"
+                autocapitalize="sentences" autocorrect="on"></textarea>
 
       <p class="doc-footnote">
         This is your story. Story buddy can only add a line if you tap <strong>add this</strong>.
@@ -85,7 +87,8 @@
 
         <form id="chat-form" class="chat-form" autocomplete="off">
           <textarea id="chat-input" class="chat-input" rows="2"
-                    placeholder="Type something…" aria-label="Your message"></textarea>
+                    placeholder="Type something…" aria-label="Your message"
+                    autocapitalize="sentences"></textarea>
           <button type="button" id="mic-btn" class="btn-mic" aria-label="Voice input" title="Speak your message">🎤</button>
           <button type="submit" class="btn-send" aria-label="Send">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none"
