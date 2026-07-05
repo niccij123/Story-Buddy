@@ -171,9 +171,13 @@ function triggerSave() {
 
 // ── Stories drawer ────────────────────────────────────────────────────────
 storiesBtn.addEventListener('click', () => {
-  const open = !storiesDrawer.hidden;
-  storiesDrawer.hidden = open;
-  if (!open) renderStoriesList();
+  const isOpen = !storiesDrawer.hidden;
+  if (isOpen) { storiesDrawer.hidden = true; return; }
+  const rect = storiesBtn.getBoundingClientRect();
+  storiesDrawer.style.top  = (rect.bottom + 8) + 'px';
+  storiesDrawer.style.left = Math.max(8, rect.right - 300) + 'px';
+  storiesDrawer.hidden = false;
+  renderStoriesList();
 });
 
 newStoryBtn.addEventListener('click', () => {

@@ -164,7 +164,6 @@ html, body {
   padding-bottom: 12px;
   border-bottom: 2px solid var(--clr-border);
   background: var(--clr-surface);
-  position: relative;
 }
 
 /* ── My Stories button & drawer ──────────────────────────────────────────── */
@@ -184,15 +183,13 @@ html, body {
 .btn-stories:hover { border-color: var(--clr-accent); color: var(--clr-accent); }
 
 .stories-drawer {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  position: fixed;
   width: 300px;
   background: var(--clr-surface);
   border: 2px solid var(--clr-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  z-index: 100;
+  z-index: 200;
   overflow: hidden;
 }
 .stories-drawer-header {

@@ -34,14 +34,6 @@
         <button id="stories-btn" class="btn-stories" aria-label="My stories">📚 My Stories</button>
       </div>
 
-      <!-- Stories drawer -->
-      <div id="stories-drawer" class="stories-drawer" hidden>
-        <div class="stories-drawer-header">
-          <span class="stories-drawer-title">My Stories</span>
-          <button id="new-story-btn" class="btn-primary btn-small">+ New story</button>
-        </div>
-        <ul id="stories-list" class="stories-list"></ul>
-      </div>
 
       <textarea id="story-body" class="story-body"
                 placeholder="Start writing your story here…"
@@ -156,6 +148,15 @@
     </div><!-- /right-column -->
 
   </div><!-- /app -->
+
+  <!-- Stories drawer — outside all panels so overflow:hidden can't clip it -->
+  <div id="stories-drawer" class="stories-drawer" hidden>
+    <div class="stories-drawer-header">
+      <span class="stories-drawer-title">My Stories</span>
+      <button id="new-story-btn" class="btn-primary btn-small">+ New story</button>
+    </div>
+    <ul id="stories-list" class="stories-list"></ul>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>
