@@ -5,7 +5,7 @@ from typing import Optional
 
 import anthropic
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -217,10 +217,9 @@ def _app_html() -> str:
     return html
 
 
-@app.get("/", response_class=HTMLResponse)
-def pin_page():
-    """Serve a minimal PIN-only page."""
-    return HTMLResponse("""<!DOCTYPE html>
+def _pin_page_html(error: bool = False) -> str:
+    error_html = '<p class="pin-error">Wrong PIN — try again.</p>' if error else ''
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
@@ -234,55 +233,21 @@ def pin_page():
       <div class="pin-logo">📖</div>
       <h1>Story Buddy</h1>
       <p>Enter the family PIN to start writing.</p>
-      <form id="pin-form" method="post" action="/api/verify-pin" autocomplete="off">
-        <input id="pin-input" name="pin" type="text" inputmode="numeric"
-               placeholder="PIN" autocomplete="off" maxlength="12"
-               style="letter-spacing:0.2em; -webkit-text-security:disc; text-security:disc;"/>
+      <form method="post" action="/api/verify-pin">
+        <input name="pin" type="password" placeholder="PIN"
+               autocomplete="current-password" maxlength="12" autofocus/>
         <button type="submit" class="btn-primary">Let's go</button>
       </form>
-      <p id="pin-error" class="pin-error" hidden>Wrong PIN — try again.</p>
+      {error_html}
     </div>
   </div>
-  <script>
-    // Form submits as application/x-www-form-urlencoded but backend expects JSON.
-    // Intercept, POST JSON, let the server 303-redirect on success.
-    const form  = document.getElementById('pin-form');
-    const input = document.getElementById('pin-input');
-    const err   = document.getElementById('pin-error');
-
-    form.addEventListener('submit', async e => {
-      e.preventDefault();
-      const pin = input.value.trim();
-      if (!pin) return;
-      const btn = form.querySelector('button');
-      btn.disabled = true;
-      btn.textContent = 'Checking…';
-      err.hidden = true;
-      try {
-        const res = await fetch('/api/verify-pin', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({pin}),
-          redirect: 'follow',
-        });
-        if (res.ok || res.redirected) {
-          window.location.replace(res.url || '/app');
-        } else {
-          err.hidden = false;
-          input.value = '';
-          input.focus();
-        }
-      } catch {
-        err.textContent = 'Cannot reach server — try refreshing.';
-        err.hidden = false;
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Let's go";
-      }
-    });
-  </script>
 </body>
-</html>""")
+</html>"""
+
+
+@app.get("/", response_class=HTMLResponse)
+def pin_page(error: str = ""):
+    return HTMLResponse(_pin_page_html(error == "1"))
 
 
 @app.get("/app", response_class=HTMLResponse)
@@ -296,9 +261,9 @@ def serve_app(request: Request):
 
 @app.post("/api/verify-pin")
 @limiter.limit("10/minute")
-async def verify_pin(request: Request, body: PinRequest):
-    if body.pin.strip() != APP_PIN.strip():
-        raise HTTPException(status_code=401, detail="Wrong PIN")
+async def verify_pin(request: Request, pin: str = Form(...)):
+    if pin.strip() != APP_PIN.strip():
+        return RedirectResponse("/?error=1", status_code=303)
     response = RedirectResponse("/app", status_code=303)
     response.set_cookie(
         key="sb_verified", value="1",
