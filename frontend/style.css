@@ -285,6 +285,92 @@ html, body {
   letter-spacing: .02em;
 }
 
+/* ── Doc toolbar ─────────────────────────────────────────────────────────── */
+.doc-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 6px 0 10px;
+}
+.btn-tool {
+  background: var(--clr-surface);
+  border: 1.5px solid var(--clr-border);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--clr-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-tool:hover { border-color: var(--clr-accent); color: var(--clr-accent); }
+.word-count {
+  margin-left: auto;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--clr-text-muted);
+}
+
+/* ── Export menu ─────────────────────────────────────────────────────────── */
+.export-menu {
+  position: fixed;
+  background: var(--clr-surface);
+  border: 2px solid var(--clr-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 200;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.export-option {
+  background: none;
+  border: none;
+  padding: 12px 18px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--clr-text);
+  cursor: pointer;
+  text-align: left;
+}
+.export-option:hover { background: var(--clr-bg); }
+.export-option + .export-option { border-top: 1px solid var(--clr-border); }
+
+/* ── Mic button ──────────────────────────────────────────────────────────── */
+.btn-mic {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 6px;
+  opacity: 0.6;
+  line-height: 1;
+}
+.btn-mic:hover { opacity: 1; }
+
+/* ── Add-to-story button on buddy bubbles ────────────────────────────────── */
+.chat-bubble.buddy { gap: 6px; }
+.chat-bubble p { margin: 0; }
+.btn-add-to-story {
+  align-self: flex-start;
+  background: none;
+  border: 1.5px solid var(--clr-accent);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--clr-accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-add-to-story:hover { background: var(--clr-accent); color: #fff; }
+.btn-add-to-story:disabled { opacity: 0.5; cursor: default; }
+
 .story-body {
   flex: 1;
   resize: none;
@@ -395,6 +481,9 @@ html, body {
   color: var(--clr-text);
   border-bottom-left-radius: 4px;
   box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .chat-bubble.child {
   align-self: flex-end;

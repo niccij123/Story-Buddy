@@ -34,6 +34,12 @@
         <button id="stories-btn" class="btn-stories" aria-label="My stories">📚 My Stories</button>
       </div>
 
+      <!-- Doc toolbar -->
+      <div class="doc-toolbar">
+        <button id="chapter-btn" class="btn-tool" title="Add new chapter">📄 New Chapter</button>
+        <button id="export-btn" class="btn-tool" title="Export story">⬇️ Export</button>
+        <span id="word-count" class="word-count">0 words</span>
+      </div>
 
       <textarea id="story-body" class="story-body"
                 placeholder="Start writing your story here…"
@@ -80,6 +86,7 @@
         <form id="chat-form" class="chat-form" autocomplete="off">
           <textarea id="chat-input" class="chat-input" rows="2"
                     placeholder="Type something…" aria-label="Your message"></textarea>
+          <button type="button" id="mic-btn" class="btn-mic" aria-label="Voice input" title="Speak your message">🎤</button>
           <button type="submit" class="btn-send" aria-label="Send">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none"
                  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -148,6 +155,12 @@
     </div><!-- /right-column -->
 
   </div><!-- /app -->
+
+  <!-- Export menu — outside panels so overflow:hidden can't clip it -->
+  <div id="export-menu" class="export-menu" hidden>
+    <button class="export-option" data-action="txt">📄 Download as .txt</button>
+    <button class="export-option" data-action="copy">📋 Copy to clipboard</button>
+  </div>
 
   <!-- Stories drawer — outside all panels so overflow:hidden can't clip it -->
   <div id="stories-drawer" class="stories-drawer" hidden>

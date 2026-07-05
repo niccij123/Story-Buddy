@@ -24,6 +24,11 @@ const storiesBtn        = document.getElementById('stories-btn');
 const storiesDrawer     = document.getElementById('stories-drawer');
 const storiesList       = document.getElementById('stories-list');
 const newStoryBtn       = document.getElementById('new-story-btn');
+const wordCount         = document.getElementById('word-count');
+const chapterBtn        = document.getElementById('chapter-btn');
+const exportBtn         = document.getElementById('export-btn');
+const exportMenu        = document.getElementById('export-menu');
+const micBtn            = document.getElementById('mic-btn');
 
 // ── Multi-story storage ───────────────────────────────────────────────────
 function genId() {
@@ -113,6 +118,7 @@ function loadStory(story) {
   }
 
   try { localStorage.setItem(CURRENT_KEY, currentStoryId); } catch {}
+  updateWordCount();
 }
 
 function renderStoriesList() {
@@ -308,7 +314,16 @@ async function sendToBackend() {
 function appendMessage(role, text) {
   const div = document.createElement('div');
   div.className = `chat-bubble ${role}`;
-  div.textContent = text;
+  div.dataset.text = text;
+  const p = document.createElement('p');
+  p.textContent = text;
+  div.appendChild(p);
+  if (role === 'buddy') {
+    const btn = document.createElement('button');
+    btn.className = 'btn-add-to-story';
+    btn.textContent = '+ Add to story';
+    div.appendChild(btn);
+  }
   chatMessages.appendChild(div);
   chatMessages.scrollTop = chatMessages.scrollHeight;
   return div;
@@ -380,4 +395,123 @@ function clearBibleField(field) {
 
 // ── Document autosave triggers ────────────────────────────────────────────
 storyTitle.addEventListener('input', triggerSave);
-storyBody.addEventListener('input',  triggerSave);
+storyBody.addEventListener('input',  () => { triggerSave(); updateWordCount(); });
+
+// ── Word count ────────────────────────────────────────────────────────────
+function updateWordCount() {
+  const text  = storyBody.value.trim();
+  const count = text ? text.split(/\s+/).length : 0;
+  wordCount.textContent = count === 1 ? '1 word' : `${count} words`;
+}
+
+// ── New chapter ───────────────────────────────────────────────────────────
+chapterBtn.addEventListener('click', () => {
+  const chapters = (storyBody.value.match(/^Chapter \d+/gm) || []).length;
+  const heading  = `\n\nChapter ${chapters + 1}\n\n`;
+  const pos      = storyBody.selectionStart;
+  const before   = storyBody.value.slice(0, pos);
+  const after    = storyBody.value.slice(pos);
+  storyBody.value = before + heading + after;
+  const newPos = pos + heading.length;
+  storyBody.setSelectionRange(newPos, newPos);
+  storyBody.focus();
+  triggerSave();
+  updateWordCount();
+});
+
+// ── Export ────────────────────────────────────────────────────────────────
+exportBtn.addEventListener('click', () => {
+  const isOpen = !exportMenu.hidden;
+  if (isOpen) { exportMenu.hidden = true; return; }
+  const rect = exportBtn.getBoundingClientRect();
+  exportMenu.style.top  = (rect.bottom + 8) + 'px';
+  exportMenu.style.left = rect.left + 'px';
+  exportMenu.hidden = false;
+});
+
+exportMenu.addEventListener('click', e => {
+  const action = e.target.dataset.action;
+  if (!action) return;
+  exportMenu.hidden = true;
+  const title = storyTitle.value.trim() || 'My Story';
+  const text  = `${title}\n${'='.repeat(title.length)}\n\n${storyBody.value}`;
+  if (action === 'txt') {
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `${title}.txt`; a.click();
+    URL.revokeObjectURL(url);
+  } else if (action === 'copy') {
+    navigator.clipboard.writeText(text).then(() => {
+      exportBtn.textContent = '✅ Copied!';
+      setTimeout(() => { exportBtn.textContent = '⬇️ Export'; }, 2000);
+    });
+  }
+});
+
+document.addEventListener('click', e => {
+  if (!exportMenu.hidden && !exportMenu.contains(e.target) && e.target !== exportBtn) {
+    exportMenu.hidden = true;
+  }
+});
+
+// ── Voice to text ─────────────────────────────────────────────────────────
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SpeechRecognition) {
+  micBtn.hidden = true;
+} else {
+  const recogniser = new SpeechRecognition();
+  recogniser.continuous      = false;
+  recogniser.interimResults  = false;
+  recogniser.lang            = 'en-US';
+  let listening = false;
+
+  micBtn.addEventListener('click', () => {
+    if (listening) { recogniser.stop(); return; }
+    recogniser.start();
+  });
+
+  recogniser.onstart = () => {
+    listening = true;
+    micBtn.textContent = '🔴';
+    micBtn.title = 'Listening… click to stop';
+  };
+
+  recogniser.onresult = e => {
+    const transcript = e.results[0][0].transcript;
+    const sep = chatInput.value && !chatInput.value.endsWith(' ') ? ' ' : '';
+    chatInput.value += sep + transcript;
+    chatInput.style.height = 'auto';
+    chatInput.style.height = chatInput.scrollHeight + 'px';
+    chatInput.focus();
+  };
+
+  recogniser.onend = () => {
+    listening = false;
+    micBtn.textContent = '🎤';
+    micBtn.title = 'Speak your message';
+  };
+
+  recogniser.onerror = e => {
+    listening = false;
+    micBtn.textContent = '🎤';
+    if (e.error !== 'no-speech') {
+      appendMessage('buddy', `Microphone error: ${e.error}. Check your browser permissions.`);
+    }
+  };
+}
+
+// ── Add buddy message to story ────────────────────────────────────────────
+chatMessages.addEventListener('click', e => {
+  const btn = e.target.closest('.btn-add-to-story');
+  if (!btn) return;
+  const bubble = btn.closest('.chat-bubble');
+  const text   = bubble.dataset.text;
+  if (!text) return;
+  const current = storyBody.value;
+  storyBody.value = current + (current.endsWith('\n') || !current ? '' : '\n') + text + '\n';
+  btn.textContent = '✅ Added';
+  btn.disabled = true;
+  triggerSave();
+  updateWordCount();
+});
