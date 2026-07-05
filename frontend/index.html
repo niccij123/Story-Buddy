@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Story Buddy</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── PIN gate ──────────────────────────────────────────────────────── -->
+  <div id="pin-gate" class="pin-gate">
+    <div class="pin-box">
+      <div class="pin-logo">📖</div>
+      <h1>Story Buddy</h1>
+      <p>Enter the family PIN to start writing.</p>
+      <input id="pin-input" type="password" inputmode="numeric"
+             placeholder="PIN" autocomplete="off" maxlength="12" />
+      <button id="pin-submit" class="btn-primary">Let's go</button>
+      <p id="pin-error" class="pin-error" hidden>Wrong PIN — try again.</p>
+    </div>
+  </div>
+
+  <!-- ── Main app (hidden until PIN passes) ────────────────────────────── -->
+  <div id="app" class="app" hidden>
+
+    <!-- ── Left panel: writing document ─────────────────────────────── -->
+    <section class="panel panel-doc" aria-label="Your story">
+
+      <div class="doc-header">
+        <input id="story-title" class="story-title" type="text"
+               placeholder="Give your story a title…" aria-label="Story title" />
+        <span id="save-indicator" class="save-indicator" aria-live="polite"></span>
+      </div>
+
+      <textarea id="story-body" class="story-body"
+                placeholder="Start writing your story here…"
+                aria-label="Story text" spellcheck="true"></textarea>
+
+      <p class="doc-footnote">
+        This is your story. Story buddy can only add a line if you tap <strong>add this</strong>.
+      </p>
+
+    </section>
+
+    <!-- ── Right column ──────────────────────────────────────────────── -->
+    <div class="right-column">
+
+      <!-- ── Chat panel ──────────────────────────────────────────────── -->
+      <section class="panel panel-chat" aria-label="Story buddy chat">
+
+        <div class="chat-mode-toggle" role="group" aria-label="Mode">
+          <button id="mode-brainstorm" class="mode-btn active" data-mode="brainstorm">
+            Brainstorm
+          </button>
+          <button id="mode-cowrite" class="mode-btn" data-mode="cowrite">
+            Cowrite
+          </button>
+        </div>
+
+        <div id="chat-messages" class="chat-messages" aria-live="polite" aria-label="Chat messages">
+          <!-- Buddy welcome message -->
+          <div class="chat-bubble buddy">
+            Hi! I'm your story buddy. What kind of story do you want to make today?
+          </div>
+        </div>
+
+        <!-- Cowrite suggestion card (hidden in brainstorm mode) -->
+        <div id="suggestion-card" class="suggestion-card" hidden>
+          <div class="suggestion-label">✏️ Here's a line you could use:</div>
+          <p id="suggestion-text" class="suggestion-text"></p>
+          <div class="btn-row">
+            <button id="suggestion-add" class="btn-primary btn-small">Add this</button>
+            <button id="suggestion-dismiss" class="btn-ghost btn-small">No thanks</button>
+          </div>
+        </div>
+
+        <form id="chat-form" class="chat-form" autocomplete="off">
+          <textarea id="chat-input" class="chat-input" rows="2"
+                    placeholder="Type something…" aria-label="Your message"></textarea>
+          <button type="submit" class="btn-send" aria-label="Send">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"
+                 xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M2 10L18 2L10 18L8.5 11.5L2 10Z"
+                    fill="currentColor" stroke="currentColor"
+                    stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </form>
+
+      </section>
+
+      <!-- ── Story bible panel ────────────────────────────────────────── -->
+      <section class="panel panel-bible" aria-label="Story bible">
+
+        <h2 class="bible-heading">Story Bible</h2>
+
+        <div class="bible-cards">
+
+          <div class="bible-card" id="card-character">
+            <div class="bible-card-header">
+              <span class="bible-icon">🧑</span>
+              <span class="bible-label">Character</span>
+              <button class="bible-clear" aria-label="Clear character" data-field="character">×</button>
+            </div>
+            <p class="bible-value empty" id="val-character">Not started yet</p>
+          </div>
+
+          <div class="bible-card" id="card-setting">
+            <div class="bible-card-header">
+              <span class="bible-icon">🗺️</span>
+              <span class="bible-label">Setting</span>
+              <button class="bible-clear" aria-label="Clear setting" data-field="setting">×</button>
+            </div>
+            <p class="bible-value empty" id="val-setting">Not started yet</p>
+          </div>
+
+          <div class="bible-card" id="card-problem">
+            <div class="bible-card-header">
+              <span class="bible-icon">⚡</span>
+              <span class="bible-label">The Problem</span>
+              <button class="bible-clear" aria-label="Clear problem" data-field="problem">×</button>
+            </div>
+            <p class="bible-value empty" id="val-problem">Not started yet</p>
+          </div>
+
+          <!-- Writer tip — always present, updates when a tip arrives -->
+          <div class="bible-card card-tip" id="card-tip">
+            <div class="bible-card-header">
+              <span class="bible-icon">💡</span>
+              <span class="bible-label">Writer Tip</span>
+            </div>
+            <p class="bible-value empty" id="val-tip">Tips will appear as you write.</p>
+          </div>
+
+        </div>
+
+        <!-- Plot beats — only shown once Problem is set -->
+        <div id="plot-beats-section" class="plot-beats-section" hidden>
+          <h3 class="beats-heading">What happens</h3>
+          <ol id="plot-beats-list" class="plot-beats-list"></ol>
+        </div>
+
+      </section>
+
+    </div><!-- /right-column -->
+
+  </div><!-- /app -->
+
+  <script src="app.js"></script>
+</body>
+</html>
