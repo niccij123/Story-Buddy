@@ -267,6 +267,7 @@ async def verify_pin(request: Request, pin: str = Form(...)):
     response = RedirectResponse("/app", status_code=303)
     response.set_cookie(
         key="sb_verified", value="1",
+        path="/",
         httponly=True, samesite="lax", secure=True,
         max_age=60 * 60 * 24 * 30,   # 30 days
     )
