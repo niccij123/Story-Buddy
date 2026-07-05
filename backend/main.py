@@ -251,11 +251,7 @@ def pin_page(error: str = ""):
 
 
 @app.get("/app", response_class=HTMLResponse)
-def serve_app(request: Request):
-    """Serve the main app — only reachable after PIN verification sets the cookie."""
-    verified = request.cookies.get("sb_verified")
-    if verified != "1":
-        return RedirectResponse("/")
+def serve_app():
     return HTMLResponse(_app_html())
 
 
