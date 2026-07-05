@@ -1,5 +1,5 @@
 // ── Config ────────────────────────────────────────────────────────────────
-const API_BASE    = window.__API_BASE__ ?? 'http://localhost:8000';
+const API_BASE    = '';
 const STORAGE_KEY = 'storybuddy_session';
 
 // ── State ─────────────────────────────────────────────────────────────────
