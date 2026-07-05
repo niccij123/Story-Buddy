@@ -1,6 +1,5 @@
 // ── Config ────────────────────────────────────────────────────────────────
-const PIN        = window.__APP_PIN__ ?? 'story';
-const API_BASE   = window.__API_BASE__ ?? 'http://localhost:8000';
+const API_BASE    = window.__API_BASE__ ?? 'http://localhost:8000';
 const STORAGE_KEY = 'storybuddy_session';
 
 // ── State ─────────────────────────────────────────────────────────────────
@@ -15,11 +14,6 @@ let storyBible  = {
 };
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
-const pinGate           = document.getElementById('pin-gate');
-const appEl             = document.getElementById('app');
-const pinInput          = document.getElementById('pin-input');
-const pinSubmit         = document.getElementById('pin-submit');
-const pinError          = document.getElementById('pin-error');
 const chatForm          = document.getElementById('chat-form');
 const chatInput         = document.getElementById('chat-input');
 const chatMessages      = document.getElementById('chat-messages');
@@ -30,6 +24,9 @@ const suggestionDismiss = document.getElementById('suggestion-dismiss');
 const storyBody         = document.getElementById('story-body');
 const storyTitle        = document.getElementById('story-title');
 const saveIndicator     = document.getElementById('save-indicator');
+
+// ── Startup ───────────────────────────────────────────────────────────────
+restoreSession();
 
 // ── Persistence ───────────────────────────────────────────────────────────
 function saveSession() {
@@ -104,50 +101,6 @@ function triggerSave() {
     setTimeout(() => { saveIndicator.textContent = ''; }, 2000);
   }, 800);
 }
-
-// ── PIN gate ──────────────────────────────────────────────────────────────
-function unlockApp() {
-  pinGate.hidden = true;
-  appEl.hidden   = false;
-  pinInput.value = '';
-  restoreSession();
-}
-
-pinSubmit.addEventListener('click', () => checkPin());
-async function checkPin() {
-  const entered = pinInput.value.trim();
-  if (!entered) return;
-  pinSubmit.textContent = 'Checking…';
-  pinSubmit.disabled = true;
-  pinError.hidden = true;
-
-  try {
-    const res = await fetch('/api/verify-pin', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ pin: entered }),
-    });
-    if (res.ok) {
-      pinSubmit.textContent = 'OK!';
-      unlockApp();
-    } else {
-      pinError.textContent = `Wrong PIN (server said ${res.status}) — try again.`;
-      pinError.hidden = false;
-      pinInput.value  = '';
-      pinInput.focus();
-    }
-  } catch (err) {
-    pinError.textContent = `Server error: ${err.message} — try refreshing.`;
-    pinError.hidden = false;
-  } finally {
-    pinSubmit.disabled = false;
-    pinSubmit.textContent = "Let's go";
-  }
-}
-
-pinInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') pinSubmit.click();
-});
 
 // ── Mode toggle ───────────────────────────────────────────────────────────
 document.querySelectorAll('.mode-btn').forEach(btn => {

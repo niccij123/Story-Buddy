@@ -7,7 +7,7 @@ import anthropic
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -209,27 +209,98 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/", response_class=HTMLResponse)
-def serve_app():
-    """Serve index.html with the PIN and API base injected from environment."""
+def _app_html() -> str:
     html = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
-    injection = (
-        f"<script>"
-        f"window.__APP_PIN__ = {json.dumps(APP_PIN)};"
-        f"window.__API_BASE__ = '';"   # same-origin when served by FastAPI
-        f"</script>"
-    )
-    html = html.replace("</head>", injection + "\n</head>", 1)
-    return HTMLResponse(html)
+    # Hide the pin gate and show the app directly — no client-side toggle needed
+    html = html.replace('<div id="pin-gate"', '<div id="pin-gate" hidden', 1)
+    html = html.replace('<div id="app" class="app" hidden', '<div id="app" class="app"', 1)
+    return html
+
+
+@app.get("/", response_class=HTMLResponse)
+def pin_page():
+    """Serve a minimal PIN-only page."""
+    return HTMLResponse("""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Story Buddy</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="pin-gate">
+    <div class="pin-box">
+      <div class="pin-logo">📖</div>
+      <h1>Story Buddy</h1>
+      <p>Enter the family PIN to start writing.</p>
+      <input id="pin-input" type="password" inputmode="numeric"
+             placeholder="PIN" autocomplete="off" maxlength="12"/>
+      <button id="pin-submit" class="btn-primary">Let's go</button>
+      <p id="pin-error" class="pin-error" hidden>Wrong PIN — try again.</p>
+    </div>
+  </div>
+  <script>
+    const btn   = document.getElementById('pin-submit');
+    const input = document.getElementById('pin-input');
+    const err   = document.getElementById('pin-error');
+
+    async function tryPin() {
+      const pin = input.value.trim();
+      if (!pin) return;
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+      err.hidden = true;
+      try {
+        const res = await fetch('/api/verify-pin', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({pin}),
+        });
+        if (res.ok) {
+          window.location.href = '/app';
+        } else {
+          err.hidden = false;
+          input.value = '';
+          input.focus();
+        }
+      } catch {
+        err.textContent = 'Cannot reach server — try refreshing.';
+        err.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Let's go";
+      }
+    }
+
+    btn.addEventListener('click', tryPin);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') tryPin(); });
+  </script>
+</body>
+</html>""")
+
+
+@app.get("/app", response_class=HTMLResponse)
+def serve_app(request: Request):
+    """Serve the main app — only reachable after PIN verification sets the cookie."""
+    verified = request.cookies.get("sb_verified")
+    if verified != "1":
+        return RedirectResponse("/")
+    return HTMLResponse(_app_html())
 
 
 @app.post("/api/verify-pin")
-@limiter.limit("10/minute")          # tight limit to block brute-force
+@limiter.limit("10/minute")
 async def verify_pin(request: Request, body: PinRequest):
-    """Let the frontend verify the PIN server-side without exposing it in JS."""
     if body.pin.strip() != APP_PIN.strip():
         raise HTTPException(status_code=401, detail="Wrong PIN")
-    return {"ok": True}
+    response = HTMLResponse('{"ok":true}', media_type="application/json")
+    response.set_cookie(
+        key="sb_verified", value="1",
+        httponly=True, samesite="lax",
+        max_age=60 * 60 * 24 * 30,   # 30 days
+    )
+    return response
 
 
 @app.post("/api/chat", response_model=ChatResponse)
