@@ -234,8 +234,8 @@ def _pin_page_html(error: bool = False) -> str:
       <h1>Story Buddy</h1>
       <p>Enter the family PIN to start writing.</p>
       <form method="post" action="/api/verify-pin">
-        <input name="pin" type="password" placeholder="PIN"
-               autocomplete="current-password" maxlength="12" autofocus/>
+        <input name="pin" type="text" placeholder="PIN"
+               autocomplete="off" maxlength="12" autofocus/>
         <button type="submit" class="btn-primary">Let's go</button>
       </form>
       {error_html}
