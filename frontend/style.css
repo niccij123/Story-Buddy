@@ -158,13 +158,108 @@ html, body {
 
 .doc-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 14px;
   flex-shrink: 0;
   padding-bottom: 12px;
   border-bottom: 2px solid var(--clr-border);
-  background: var(--clr-surface); /* cover the line pattern behind the title */
+  background: var(--clr-surface);
+  position: relative;
 }
+
+/* ── My Stories button & drawer ──────────────────────────────────────────── */
+.btn-stories {
+  flex-shrink: 0;
+  background: var(--clr-surface);
+  border: 2px solid var(--clr-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--clr-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-stories:hover { border-color: var(--clr-accent); color: var(--clr-accent); }
+
+.stories-drawer {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 300px;
+  background: var(--clr-surface);
+  border: 2px solid var(--clr-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  overflow: hidden;
+}
+.stories-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--clr-border);
+}
+.stories-drawer-title {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--clr-text);
+}
+.stories-list {
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.stories-empty {
+  padding: 20px 16px;
+  color: var(--clr-text-muted);
+  font-size: 14px;
+  text-align: center;
+}
+.story-item {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--clr-border);
+}
+.story-item:last-child { border-bottom: none; }
+.story-item.current { background: #f5f9ff; }
+.story-item-load {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.story-item-load:hover { background: var(--clr-bg); }
+.story-item-title {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--clr-text);
+}
+.story-item-date {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--clr-text-muted);
+}
+.story-item-delete {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-size: 16px;
+  opacity: 0.4;
+}
+.story-item-delete:hover { opacity: 1; }
 
 .story-title {
   flex: 1;
