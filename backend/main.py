@@ -16,7 +16,7 @@ from slowapi.util import get_remote_address
 
 load_dotenv()
 
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 APP_PIN            = os.environ.get("APP_PIN", "story")
 SYSTEM_PROMPT      = (Path(__file__).parent / "system_prompt.md").read_text()
 FRONTEND_DIR       = Path(__file__).parent.parent / "frontend"
@@ -38,7 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 
 TOOLS = [
     {
@@ -235,6 +235,8 @@ async def verify_pin(request: Request, body: PinRequest):
 @app.post("/api/chat", response_model=ChatResponse)
 @limiter.limit("30/minute")
 async def chat(request: Request, body: ChatRequest):
+    if not ANTHROPIC_API_KEY or client is None:
+        raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY is not configured on the server")
     if body.mode not in ("brainstorm", "cowrite"):
         raise HTTPException(status_code=400, detail="mode must be 'brainstorm' or 'cowrite'")
 
@@ -284,3 +286,9 @@ async def chat(request: Request, body: ChatRequest):
 # ── Static files (must come last — catches everything not matched above) ───────
 # Serves style.css, app.js, and any other assets from the frontend directory.
 app.mount("/", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=port)
