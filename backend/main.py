@@ -297,7 +297,7 @@ async def verify_pin(request: Request, body: PinRequest):
     response = HTMLResponse('{"ok":true}', media_type="application/json")
     response.set_cookie(
         key="sb_verified", value="1",
-        httponly=True, samesite="lax",
+        httponly=True, samesite="lax", secure=True,
         max_age=60 * 60 * 24 * 30,   # 30 days
     )
     return response
