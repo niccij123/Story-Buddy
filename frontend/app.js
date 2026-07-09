@@ -382,7 +382,9 @@ async function sendToBackend() {
       appendMessage('buddy', data.reply);
       chatHistory.push({ role: 'assistant', content: data.reply });
     }
-    if (data.story_bible_update) applyBibleUpdate(data.story_bible_update);
+    if (data.story_bible_updates?.length) {
+      data.story_bible_updates.forEach(applyBibleUpdate);
+    }
     if (data.suggestion && currentMode === 'cowrite') {
       suggestionText.textContent = data.suggestion;
       suggestionCard.hidden = false;

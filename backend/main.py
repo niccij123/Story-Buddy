@@ -150,7 +150,7 @@ class StoryBibleUpdate(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
-    story_bible_update: Optional[StoryBibleUpdate] = None
+    story_bible_updates: list[StoryBibleUpdate] = []
     suggestion: Optional[str] = None
 
 
@@ -182,11 +182,11 @@ def build_system_prompt(mode: str, story_bible: StoryBible, story_body: str = ""
     return "\n".join(parts)
 
 
-def collect_tool_calls(response) -> tuple[Optional[StoryBibleUpdate], Optional[str], list[dict]]:
+def collect_tool_calls(response) -> tuple[list[StoryBibleUpdate], Optional[str], list[dict]]:
     """Extract tool results and build tool_result blocks to send back if needed."""
-    bible_update = None
-    suggestion   = None
-    tool_results = []
+    bible_updates = []
+    suggestion    = None
+    tool_results  = []
 
     for block in response.content:
         if block.type != "tool_use":
@@ -194,14 +194,14 @@ def collect_tool_calls(response) -> tuple[Optional[StoryBibleUpdate], Optional[s
 
         if block.name == "update_story_bible":
             inp = block.input
-            bible_update = StoryBibleUpdate(
+            bible_updates.append(StoryBibleUpdate(
                 character_name=inp.get("character_name"),
                 character_detail=inp.get("character_detail"),
                 setting=inp.get("setting"),
                 problem=inp.get("problem"),
                 plot_beat=inp.get("plot_beat"),
                 writer_tip=inp.get("writer_tip"),
-            )
+            ))
             tool_results.append({
                 "type": "tool_result",
                 "tool_use_id": block.id,
@@ -216,7 +216,7 @@ def collect_tool_calls(response) -> tuple[Optional[StoryBibleUpdate], Optional[s
                 "content": "Suggestion noted.",
             })
 
-    return bible_update, suggestion, tool_results
+    return bible_updates, suggestion, tool_results
 
 
 def extract_text(response) -> str:
@@ -320,7 +320,7 @@ async def chat(request: Request, body: ChatRequest):
             messages=messages,
         )
 
-        bible_update, suggestion, tool_results = collect_tool_calls(response)
+        bible_updates, suggestion, tool_results = collect_tool_calls(response)
         reply = extract_text(response)
 
         # If Claude stopped to use tools without including a text reply, send the
@@ -340,15 +340,14 @@ async def chat(request: Request, body: ChatRequest):
             reply = extract_text(follow_up)
             # pick up any additional tool calls from the follow-up (rare but possible)
             extra_bible, extra_suggestion, _ = collect_tool_calls(follow_up)
-            if extra_bible:
-                bible_update = extra_bible
+            bible_updates += extra_bible
             if extra_suggestion:
                 suggestion = extra_suggestion
 
     except anthropic.APIError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-    return ChatResponse(reply=reply, story_bible_update=bible_update, suggestion=suggestion)
+    return ChatResponse(reply=reply, story_bible_updates=bible_updates, suggestion=suggestion)
 
 
 # ── Static files (must come last — catches everything not matched above) ───────
