@@ -51,9 +51,18 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "character": {
+                "character_name": {
                     "type": "string",
-                    "description": "Character name and key trait, e.g. 'Mira — brave but terrified of the ocean'",
+                    "description": (
+                        "Name of a character being introduced or updated, e.g. 'Mira'. "
+                        "Always pair with character_detail. If this name already exists in the "
+                        "story bible, its detail is updated rather than duplicated — use the exact "
+                        "same name to update an existing character."
+                    ),
+                },
+                "character_detail": {
+                    "type": "string",
+                    "description": "Key trait(s)/role for the named character, e.g. 'brave but terrified of the ocean'",
                 },
                 "setting": {
                     "type": "string",
@@ -102,8 +111,13 @@ class Message(BaseModel):
     content: str
 
 
+class CharacterEntry(BaseModel):
+    name: str
+    detail: str = ""
+
+
 class StoryBible(BaseModel):
-    character: Optional[str] = None
+    characters: list[CharacterEntry] = []
     setting: Optional[str] = None
     problem: Optional[str] = None
     plot_beats: list[str] = []
@@ -118,7 +132,8 @@ class ChatRequest(BaseModel):
 
 
 class StoryBibleUpdate(BaseModel):
-    character: Optional[str] = None
+    character_name: Optional[str] = None
+    character_detail: Optional[str] = None
     setting: Optional[str] = None
     problem: Optional[str] = None
     plot_beat: Optional[str] = None
@@ -138,8 +153,10 @@ def build_system_prompt(mode: str, story_bible: StoryBible, story_body: str = ""
     parts.append(f"\n\n## Current mode\n{mode.upper()}")
 
     bible_lines = []
-    if story_bible.character:
-        bible_lines.append(f"- Character: {story_bible.character}")
+    if story_bible.characters:
+        for c in story_bible.characters:
+            label = f"{c.name} — {c.detail}" if c.detail else c.name
+            bible_lines.append(f"- Character: {label}")
     if story_bible.setting:
         bible_lines.append(f"- Setting: {story_bible.setting}")
     if story_bible.problem:
@@ -170,7 +187,8 @@ def collect_tool_calls(response) -> tuple[Optional[StoryBibleUpdate], Optional[s
         if block.name == "update_story_bible":
             inp = block.input
             bible_update = StoryBibleUpdate(
-                character=inp.get("character"),
+                character_name=inp.get("character_name"),
+                character_detail=inp.get("character_detail"),
                 setting=inp.get("setting"),
                 problem=inp.get("problem"),
                 plot_beat=inp.get("plot_beat"),

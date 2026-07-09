@@ -6,7 +6,7 @@ const CURRENT_KEY   = 'storybuddy_current';
 // ── State ─────────────────────────────────────────────────────────────────
 let currentMode = 'brainstorm';
 let chatHistory = [];
-let storyBible  = { character: null, setting: null, problem: null, plot_beats: [], writer_tip: null };
+let storyBible  = { characters: [], setting: null, problem: null, plot_beats: [], writer_tip: null };
 let currentStoryId = null;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
@@ -69,9 +69,22 @@ function buildBlankStory() {
     body: '',
     mode: 'brainstorm',
     chatHistory: [],
-    storyBible: { character: null, setting: null, problem: null, plot_beats: [], writer_tip: null },
+    storyBible: { characters: [], setting: null, problem: null, plot_beats: [], writer_tip: null },
     updatedAt: Date.now(),
   };
+}
+
+// Old saves stored a single `character: "Name — trait"` string. Convert to
+// the characters[] list shape on load so nothing is lost.
+function migrateStoryBible(bible) {
+  const b = { characters: [], setting: null, problem: null, plot_beats: [], writer_tip: null, ...(bible || {}) };
+  if (!Array.isArray(b.characters)) b.characters = [];
+  if (bible && typeof bible.character === 'string' && bible.character.trim()) {
+    const [name, ...rest] = bible.character.split('—');
+    b.characters.push({ name: (name || bible.character).trim(), detail: rest.join('—').trim() });
+  }
+  delete b.character;
+  return b;
 }
 
 // Cross-tab mutex around the storage read-modify-write cycle. Without this,
@@ -108,8 +121,7 @@ function loadStory(story) {
   storyTitle.value = story.title || '';
   storyBody.value  = story.body  || '';
   currentMode      = story.mode  || 'brainstorm';
-  storyBible       = { character: null, setting: null, problem: null, plot_beats: [], writer_tip: null,
-                       ...(story.storyBible || {}) };
+  storyBible       = migrateStoryBible(story.storyBible);
   chatHistory      = story.chatHistory || [];
 
   // Reset UI
@@ -119,7 +131,8 @@ function loadStory(story) {
   suggestionCard.hidden = true;
 
   // Bible
-  ['character','setting','problem'].forEach(f => {
+  renderCharacters();
+  ['setting','problem'].forEach(f => {
     const el = document.getElementById(`val-${f}`);
     if (storyBible[f]) { el.textContent = storyBible[f]; el.classList.remove('empty'); }
     else               { el.textContent = 'Not started yet'; el.classList.add('empty'); }
@@ -414,7 +427,7 @@ suggestionDismiss.addEventListener('click', () => { suggestionCard.hidden = true
 
 // ── Story bible ───────────────────────────────────────────────────────────
 function applyBibleUpdate(update) {
-  if (update.character  != null) setBibleField('character', update.character);
+  if (update.character_name != null) upsertCharacter(update.character_name, update.character_detail || '');
   if (update.setting    != null) setBibleField('setting',   update.setting);
   if (update.problem    != null) setBibleField('problem',   update.problem);
   if (update.writer_tip != null) setBibleField('tip',       update.writer_tip);
@@ -430,6 +443,53 @@ function setBibleField(field, value) {
   el.textContent = value;
   el.classList.remove('empty');
   if (field === 'problem') document.getElementById('plot-beats-section').hidden = false;
+}
+
+// ── Characters (multiple, each tracked separately) ──────────────────────────
+function upsertCharacter(name, detail) {
+  const trimmedName = name.trim();
+  if (!trimmedName) return;
+  const existing = storyBible.characters.find(
+    c => c.name.toLowerCase() === trimmedName.toLowerCase()
+  );
+  if (existing) {
+    existing.detail = detail;
+  } else {
+    storyBible.characters.push({ name: trimmedName, detail });
+  }
+  renderCharacters();
+}
+
+function removeCharacter(name) {
+  storyBible.characters = storyBible.characters.filter(c => c.name !== name);
+  renderCharacters();
+  triggerSave();
+}
+
+function renderCharacters() {
+  const list  = document.getElementById('character-list');
+  const empty = document.getElementById('character-empty');
+  list.querySelectorAll('.character-row').forEach(el => el.remove());
+  if (!storyBible.characters.length) {
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  storyBible.characters.forEach(c => {
+    const li = document.createElement('li');
+    li.className = 'character-row';
+    const label = document.createElement('span');
+    label.className = 'character-label';
+    label.textContent = c.detail ? `${c.name} — ${c.detail}` : c.name;
+    const btn = document.createElement('button');
+    btn.className = 'bible-clear';
+    btn.setAttribute('aria-label', `Remove ${c.name}`);
+    btn.textContent = '×';
+    btn.addEventListener('click', () => removeCharacter(c.name));
+    li.appendChild(label);
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
 }
 
 function renderPlotBeats() {

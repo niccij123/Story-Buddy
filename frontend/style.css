@@ -678,6 +678,29 @@ html, body {
   font-weight: 400;
 }
 
+/* Character list — multiple characters per story */
+.character-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.character-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--clr-border);
+}
+.character-row:last-child { border-bottom: none; }
+.character-label {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--clr-text);
+  font-weight: 600;
+}
+
 /* Writer tip card */
 .card-tip {
   background: var(--clr-tip-soft);
