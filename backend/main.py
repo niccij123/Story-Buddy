@@ -66,11 +66,19 @@ TOOLS = [
                 },
                 "setting": {
                     "type": "string",
-                    "description": "Where and roughly when the story takes place",
+                    "description": (
+                        "A place/time the story takes place, e.g. 'a floating city in the clouds'. "
+                        "If the story moves somewhere new, add it as a new setting — don't repeat "
+                        "settings already in the bible."
+                    ),
                 },
                 "problem": {
                     "type": "string",
-                    "description": "The central problem or goal the character faces",
+                    "description": (
+                        "A central problem or goal in the story. If a new problem or goal emerges "
+                        "(without replacing the earlier one), add it separately — don't repeat "
+                        "problems already in the bible."
+                    ),
                 },
                 "plot_beat": {
                     "type": "string",
@@ -118,8 +126,8 @@ class CharacterEntry(BaseModel):
 
 class StoryBible(BaseModel):
     characters: list[CharacterEntry] = []
-    setting: Optional[str] = None
-    problem: Optional[str] = None
+    settings: list[str] = []
+    problems: list[str] = []
     plot_beats: list[str] = []
     writer_tip: Optional[str] = None
 
@@ -157,10 +165,10 @@ def build_system_prompt(mode: str, story_bible: StoryBible, story_body: str = ""
         for c in story_bible.characters:
             label = f"{c.name} — {c.detail}" if c.detail else c.name
             bible_lines.append(f"- Character: {label}")
-    if story_bible.setting:
-        bible_lines.append(f"- Setting: {story_bible.setting}")
-    if story_bible.problem:
-        bible_lines.append(f"- Problem: {story_bible.problem}")
+    for s in story_bible.settings:
+        bible_lines.append(f"- Setting: {s}")
+    for p in story_bible.problems:
+        bible_lines.append(f"- Problem: {p}")
     if story_bible.plot_beats:
         beats = "\n".join(f"  {i+1}. {b}" for i, b in enumerate(story_bible.plot_beats))
         bible_lines.append(f"- Plot beats so far:\n{beats}")

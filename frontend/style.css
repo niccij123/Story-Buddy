@@ -678,14 +678,14 @@ html, body {
   font-weight: 400;
 }
 
-/* Character list — multiple characters per story */
-.character-list {
+/* Bible list — multiple entries per card (characters, settings, problems) */
+.bible-list {
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-.character-row {
+.bible-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -693,8 +693,8 @@ html, body {
   padding: 4px 0;
   border-bottom: 1px dashed var(--clr-border);
 }
-.character-row:last-child { border-bottom: none; }
-.character-label {
+.bible-row:last-child { border-bottom: none; }
+.bible-row-label {
   font-size: 13px;
   line-height: 1.5;
   color: var(--clr-text);

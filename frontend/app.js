@@ -6,7 +6,7 @@ const CURRENT_KEY   = 'storybuddy_current';
 // ── State ─────────────────────────────────────────────────────────────────
 let currentMode = 'brainstorm';
 let chatHistory = [];
-let storyBible  = { characters: [], setting: null, problem: null, plot_beats: [], writer_tip: null };
+let storyBible  = { characters: [], settings: [], problems: [], plot_beats: [], writer_tip: null };
 let currentStoryId = null;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
@@ -69,21 +69,31 @@ function buildBlankStory() {
     body: '',
     mode: 'brainstorm',
     chatHistory: [],
-    storyBible: { characters: [], setting: null, problem: null, plot_beats: [], writer_tip: null },
+    storyBible: { characters: [], settings: [], problems: [], plot_beats: [], writer_tip: null },
     updatedAt: Date.now(),
   };
 }
 
-// Old saves stored a single `character: "Name — trait"` string. Convert to
-// the characters[] list shape on load so nothing is lost.
+// Old saves stored a single `character`/`setting`/`problem` string each.
+// Convert to the list shape on load so nothing is lost.
 function migrateStoryBible(bible) {
-  const b = { characters: [], setting: null, problem: null, plot_beats: [], writer_tip: null, ...(bible || {}) };
+  const b = { characters: [], settings: [], problems: [], plot_beats: [], writer_tip: null, ...(bible || {}) };
   if (!Array.isArray(b.characters)) b.characters = [];
+  if (!Array.isArray(b.settings))   b.settings   = [];
+  if (!Array.isArray(b.problems))   b.problems   = [];
   if (bible && typeof bible.character === 'string' && bible.character.trim()) {
     const [name, ...rest] = bible.character.split('—');
     b.characters.push({ name: (name || bible.character).trim(), detail: rest.join('—').trim() });
   }
+  if (bible && typeof bible.setting === 'string' && bible.setting.trim()) {
+    b.settings.push(bible.setting.trim());
+  }
+  if (bible && typeof bible.problem === 'string' && bible.problem.trim()) {
+    b.problems.push(bible.problem.trim());
+  }
   delete b.character;
+  delete b.setting;
+  delete b.problem;
   return b;
 }
 
@@ -132,11 +142,8 @@ function loadStory(story) {
 
   // Bible
   renderCharacters();
-  ['setting','problem'].forEach(f => {
-    const el = document.getElementById(`val-${f}`);
-    if (storyBible[f]) { el.textContent = storyBible[f]; el.classList.remove('empty'); }
-    else               { el.textContent = 'Not started yet'; el.classList.add('empty'); }
-  });
+  renderSettings();
+  renderProblems();
   if (storyBible.writer_tip) {
     const el = document.getElementById('val-tip');
     el.textContent = storyBible.writer_tip; el.classList.remove('empty');
@@ -144,7 +151,7 @@ function loadStory(story) {
     const el = document.getElementById('val-tip');
     el.textContent = 'Tips will appear as you write.'; el.classList.add('empty');
   }
-  if (storyBible.plot_beats?.length && storyBible.problem) {
+  if (storyBible.plot_beats?.length && storyBible.problems.length) {
     renderPlotBeats();
     document.getElementById('plot-beats-section').hidden = false;
   } else {
@@ -428,21 +435,73 @@ suggestionDismiss.addEventListener('click', () => { suggestionCard.hidden = true
 // ── Story bible ───────────────────────────────────────────────────────────
 function applyBibleUpdate(update) {
   if (update.character_name != null) upsertCharacter(update.character_name, update.character_detail || '');
-  if (update.setting    != null) setBibleField('setting',   update.setting);
-  if (update.problem    != null) setBibleField('problem',   update.problem);
-  if (update.writer_tip != null) setBibleField('tip',       update.writer_tip);
+  if (update.setting    != null) addUnique(storyBible.settings, update.setting, renderSettings);
+  if (update.problem    != null) addUnique(storyBible.problems, update.problem, renderProblems);
+  if (update.writer_tip != null) {
+    storyBible.writer_tip = update.writer_tip;
+    const el = document.getElementById('val-tip');
+    el.textContent = update.writer_tip;
+    el.classList.remove('empty');
+  }
   if (update.plot_beat  != null) { storyBible.plot_beats.push(update.plot_beat); renderPlotBeats(); }
   triggerSave();
 }
 
-function setBibleField(field, value) {
-  const stateKey = field === 'tip' ? 'writer_tip' : field;
-  if (stateKey in storyBible) storyBible[stateKey] = value;
-  const el = document.getElementById(`val-${field}`);
-  if (!el) return;
-  el.textContent = value;
-  el.classList.remove('empty');
-  if (field === 'problem') document.getElementById('plot-beats-section').hidden = false;
+function addUnique(arr, value, rerender) {
+  const trimmed = value.trim();
+  if (!trimmed) return;
+  if (arr.some(v => v.toLowerCase() === trimmed.toLowerCase())) return;
+  arr.push(trimmed);
+  rerender();
+  if (arr === storyBible.problems) document.getElementById('plot-beats-section').hidden = false;
+}
+
+// ── Generic bible list rendering (settings, problems) ───────────────────────
+function renderBibleList(items, listId, emptyId, onRemove) {
+  const list  = document.getElementById(listId);
+  const empty = document.getElementById(emptyId);
+  list.querySelectorAll('.bible-row').forEach(el => el.remove());
+  if (!items.length) {
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  items.forEach((text, idx) => {
+    const li = document.createElement('li');
+    li.className = 'bible-row';
+    const label = document.createElement('span');
+    label.className = 'bible-row-label';
+    label.textContent = text;
+    const btn = document.createElement('button');
+    btn.className = 'bible-clear';
+    btn.setAttribute('aria-label', 'Remove');
+    btn.textContent = '×';
+    btn.addEventListener('click', () => onRemove(idx));
+    li.appendChild(label);
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+}
+
+function renderSettings() {
+  renderBibleList(storyBible.settings, 'setting-list', 'setting-empty', idx => {
+    storyBible.settings.splice(idx, 1);
+    renderSettings();
+    triggerSave();
+  });
+}
+
+function renderProblems() {
+  renderBibleList(storyBible.problems, 'problem-list', 'problem-empty', idx => {
+    storyBible.problems.splice(idx, 1);
+    renderProblems();
+    if (!storyBible.problems.length) {
+      storyBible.plot_beats = [];
+      document.getElementById('plot-beats-section').hidden = true;
+      document.getElementById('plot-beats-list').innerHTML = '';
+    }
+    triggerSave();
+  });
 }
 
 // ── Characters (multiple, each tracked separately) ──────────────────────────
@@ -467,29 +526,11 @@ function removeCharacter(name) {
 }
 
 function renderCharacters() {
-  const list  = document.getElementById('character-list');
-  const empty = document.getElementById('character-empty');
-  list.querySelectorAll('.character-row').forEach(el => el.remove());
-  if (!storyBible.characters.length) {
-    empty.hidden = false;
-    return;
-  }
-  empty.hidden = true;
-  storyBible.characters.forEach(c => {
-    const li = document.createElement('li');
-    li.className = 'character-row';
-    const label = document.createElement('span');
-    label.className = 'character-label';
-    label.textContent = c.detail ? `${c.name} — ${c.detail}` : c.name;
-    const btn = document.createElement('button');
-    btn.className = 'bible-clear';
-    btn.setAttribute('aria-label', `Remove ${c.name}`);
-    btn.textContent = '×';
-    btn.addEventListener('click', () => removeCharacter(c.name));
-    li.appendChild(label);
-    li.appendChild(btn);
-    list.appendChild(li);
-  });
+  renderBibleList(
+    storyBible.characters.map(c => c.detail ? `${c.name} — ${c.detail}` : c.name),
+    'character-list', 'character-empty',
+    idx => removeCharacter(storyBible.characters[idx].name)
+  );
 }
 
 function renderPlotBeats() {
@@ -500,23 +541,7 @@ function renderPlotBeats() {
     li.textContent = beat;
     list.appendChild(li);
   });
-  if (storyBible.problem) document.getElementById('plot-beats-section').hidden = false;
-}
-
-document.querySelectorAll('.bible-clear').forEach(btn => {
-  btn.addEventListener('click', () => clearBibleField(btn.dataset.field));
-});
-
-function clearBibleField(field) {
-  if (field in storyBible) storyBible[field] = null;
-  const el = document.getElementById(`val-${field}`);
-  if (el) { el.textContent = 'Not started yet'; el.classList.add('empty'); }
-  if (field === 'problem') {
-    storyBible.plot_beats = [];
-    document.getElementById('plot-beats-section').hidden = true;
-    document.getElementById('plot-beats-list').innerHTML = '';
-  }
-  triggerSave();
+  if (storyBible.problems.length) document.getElementById('plot-beats-section').hidden = false;
 }
 
 // ── Document autosave triggers ────────────────────────────────────────────
