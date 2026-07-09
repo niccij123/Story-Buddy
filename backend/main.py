@@ -239,11 +239,20 @@ def health():
     return {"status": "ok"}
 
 
+def _asset_version() -> str:
+    """Mtime of app.js, used to cache-bust static assets on every deploy so
+    browsers can't keep serving a stale cached copy after a code change."""
+    return str(int((FRONTEND_DIR / "app.js").stat().st_mtime))
+
+
 def _app_html() -> str:
     html = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
     # Hide the pin gate and show the app directly — no client-side toggle needed
     html = html.replace('<div id="pin-gate" class="pin-gate">', '<div id="pin-gate" class="pin-gate" style="display:none">', 1)
     html = html.replace('<div id="app" class="app" hidden>', '<div id="app" class="app">', 1)
+    v = _asset_version()
+    html = html.replace('/static/style.css"', f'/static/style.css?v={v}"', 1)
+    html = html.replace('/static/app.js"', f'/static/app.js?v={v}"', 1)
     return html
 
 
@@ -255,7 +264,7 @@ def _pin_page_html(error: bool = False) -> str:
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Story Buddy</title>
-  <link rel="stylesheet" href="/static/style.css"/>
+  <link rel="stylesheet" href="/static/style.css?v={_asset_version()}"/>
 </head>
 <body>
   <div class="pin-gate">
