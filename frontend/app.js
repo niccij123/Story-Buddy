@@ -74,21 +74,33 @@ function buildBlankStory() {
   };
 }
 
-function saveCurrentStory() {
+// Cross-tab mutex around the storage read-modify-write cycle. Without this,
+// two tabs saving around the same time can race: both read the same stale
+// snapshot, and whichever writes last silently drops the other tab's story.
+function withStoriesLock(fn) {
+  if (navigator.locks) {
+    return navigator.locks.request(STORIES_KEY, fn);
+  }
+  return fn();
+}
+
+async function saveCurrentStory() {
   if (!currentStoryId) return false;
-  const stories = loadAllStories();
-  stories[currentStoryId] = {
-    id: currentStoryId,
-    title: storyTitle.value,
-    body: storyBody.value,
-    mode: currentMode,
-    chatHistory,
-    storyBible,
-    updatedAt: Date.now(),
-  };
-  const ok = saveAllStories(stories);
-  try { localStorage.setItem(CURRENT_KEY, currentStoryId); } catch (err) { console.error(err); }
-  return ok;
+  return withStoriesLock(() => {
+    const stories = loadAllStories();
+    stories[currentStoryId] = {
+      id: currentStoryId,
+      title: storyTitle.value,
+      body: storyBody.value,
+      mode: currentMode,
+      chatHistory,
+      storyBible,
+      updatedAt: Date.now(),
+    };
+    const ok = saveAllStories(stories);
+    try { localStorage.setItem(CURRENT_KEY, currentStoryId); } catch (err) { console.error(err); }
+    return ok;
+  });
 }
 
 function loadStory(story) {
@@ -178,8 +190,11 @@ function renderStoriesList() {
       loadStory(latest);
     } else {
       const blank = buildBlankStory();
-      const all   = {}; all[blank.id] = blank;
-      saveAllStories(all);
+      withStoriesLock(() => {
+        const all = loadAllStories();
+        all[blank.id] = blank;
+        saveAllStories(all);
+      });
       loadStory(blank);
     }
   }
@@ -190,8 +205,8 @@ let saveTimer;
 function triggerSave() {
   saveIndicator.textContent = 'Saving…';
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    const ok = saveCurrentStory();
+  saveTimer = setTimeout(async () => {
+    const ok = await saveCurrentStory();
     if (ok) {
       saveIndicator.textContent = 'Saved';
       setTimeout(() => { saveIndicator.textContent = ''; }, 2000);
@@ -225,24 +240,26 @@ storiesBtn.addEventListener('click', () => {
   renderStoriesList();
 });
 
-newStoryBtn.addEventListener('click', () => {
-  saveCurrentStory();
-  const blank    = buildBlankStory();
-  const stories  = loadAllStories();
-  stories[blank.id] = blank;
-  saveAllStories(stories);
+newStoryBtn.addEventListener('click', async () => {
+  await saveCurrentStory();
+  const blank = buildBlankStory();
+  await withStoriesLock(() => {
+    const stories = loadAllStories();
+    stories[blank.id] = blank;
+    saveAllStories(stories);
+  });
   loadStory(blank);
   storiesDrawer.hidden = true;
 });
 
-storiesList.addEventListener('click', e => {
+storiesList.addEventListener('click', async e => {
   const loadBtn = e.target.closest('.story-item-load');
   const delBtn  = e.target.closest('.story-item-delete');
 
   if (loadBtn) {
     const id = loadBtn.dataset.id;
     if (id === currentStoryId) { storiesDrawer.hidden = true; return; }
-    saveCurrentStory();
+    await saveCurrentStory();
     const stories = loadAllStories();
     if (stories[id]) loadStory(stories[id]);
     storiesDrawer.hidden = true;
@@ -253,16 +270,26 @@ storiesList.addEventListener('click', e => {
     const stories = loadAllStories();
     const title = stories[id]?.title || 'Untitled story';
     if (!confirm(`Delete "${title}"? This can't be undone.`)) return;
-    delete stories[id];
-    saveAllStories(stories);
+
+    let remaining;
+    await withStoriesLock(() => {
+      const current = loadAllStories();
+      delete current[id];
+      remaining = current;
+      saveAllStories(current);
+    });
+
     if (id === currentStoryId) {
-      const vals = Object.values(stories);
+      const vals = Object.values(remaining);
       if (vals.length) {
         loadStory(vals.sort((a, b) => b.updatedAt - a.updatedAt)[0]);
       } else {
         const blank = buildBlankStory();
-        stories[blank.id] = blank;
-        saveAllStories(stories);
+        await withStoriesLock(() => {
+          const stories = loadAllStories();
+          stories[blank.id] = blank;
+          saveAllStories(stories);
+        });
         loadStory(blank);
       }
     }
