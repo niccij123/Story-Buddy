@@ -35,13 +35,31 @@ function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
+function storageAvailable() {
+  try {
+    const testKey = '__storybuddy_test__';
+    localStorage.setItem(testKey, '1');
+    localStorage.removeItem(testKey);
+    return true;
+  } catch (err) {
+    console.error('localStorage unavailable:', err);
+    return false;
+  }
+}
+
 function loadAllStories() {
   try { return JSON.parse(localStorage.getItem(STORIES_KEY)) || {}; }
-  catch { return {}; }
+  catch (err) { console.error('Failed to load stories:', err); return {}; }
 }
 
 function saveAllStories(stories) {
-  try { localStorage.setItem(STORIES_KEY, JSON.stringify(stories)); } catch {}
+  try {
+    localStorage.setItem(STORIES_KEY, JSON.stringify(stories));
+    return true;
+  } catch (err) {
+    console.error('Failed to save stories:', err);
+    return false;
+  }
 }
 
 function buildBlankStory() {
@@ -57,7 +75,7 @@ function buildBlankStory() {
 }
 
 function saveCurrentStory() {
-  if (!currentStoryId) return;
+  if (!currentStoryId) return false;
   const stories = loadAllStories();
   stories[currentStoryId] = {
     id: currentStoryId,
@@ -68,8 +86,9 @@ function saveCurrentStory() {
     storyBible,
     updatedAt: Date.now(),
   };
-  saveAllStories(stories);
-  try { localStorage.setItem(CURRENT_KEY, currentStoryId); } catch {}
+  const ok = saveAllStories(stories);
+  try { localStorage.setItem(CURRENT_KEY, currentStoryId); } catch (err) { console.error(err); }
+  return ok;
 }
 
 function loadStory(story) {
@@ -145,6 +164,9 @@ function renderStoriesList() {
 
 // ── Startup ───────────────────────────────────────────────────────────────
 (function init() {
+  if (!storageAvailable()) {
+    showStorageWarning();
+  }
   const stories = loadAllStories();
   const savedId = localStorage.getItem(CURRENT_KEY);
   if (savedId && stories[savedId]) {
@@ -169,10 +191,27 @@ function triggerSave() {
   saveIndicator.textContent = 'Saving…';
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    saveCurrentStory();
-    saveIndicator.textContent = 'Saved';
-    setTimeout(() => { saveIndicator.textContent = ''; }, 2000);
+    const ok = saveCurrentStory();
+    if (ok) {
+      saveIndicator.textContent = 'Saved';
+      setTimeout(() => { saveIndicator.textContent = ''; }, 2000);
+    } else {
+      saveIndicator.textContent = '⚠ Not saved!';
+      saveIndicator.style.color = '#c0392b';
+      showStorageWarning();
+    }
   }, 800);
+}
+
+function showStorageWarning() {
+  if (document.getElementById('storage-warning')) return;
+  const banner = document.createElement('div');
+  banner.id = 'storage-warning';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#c0392b;color:#fff;' +
+    'text-align:center;padding:10px;font-family:sans-serif;font-size:14px;z-index:9999;';
+  banner.textContent = "Your browser is blocking saving, so your story won't be kept. " +
+    'Check your browser\'s privacy/cookie settings for this site, or try a different browser.';
+  document.body.prepend(banner);
 }
 
 // ── Stories drawer ────────────────────────────────────────────────────────
