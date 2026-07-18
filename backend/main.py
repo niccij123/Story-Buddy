@@ -5,9 +5,9 @@ from typing import Optional
 
 import anthropic
 from dotenv import load_dotenv
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -17,7 +17,6 @@ from slowapi.util import get_remote_address
 load_dotenv()
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-APP_PIN            = os.environ.get("APP_PIN", "story")
 SYSTEM_PROMPT      = (Path(__file__).parent / "system_prompt.md").read_text()
 FRONTEND_DIR       = Path(__file__).parent.parent / "frontend"
 MODEL              = "claude-sonnet-5"
@@ -226,12 +225,6 @@ def extract_text(response) -> str:
     return ""
 
 
-# ── Request / response models (PIN) ───────────────────────────────────────────
-
-class PinRequest(BaseModel):
-    pin: str
-
-
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -247,66 +240,15 @@ def _asset_version() -> str:
 
 def _app_html() -> str:
     html = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
-    # Hide the pin gate and show the app directly — no client-side toggle needed
-    html = html.replace('<div id="pin-gate" class="pin-gate">', '<div id="pin-gate" class="pin-gate" style="display:none">', 1)
-    html = html.replace('<div id="app" class="app" hidden>', '<div id="app" class="app">', 1)
     v = _asset_version()
     html = html.replace('/static/style.css"', f'/static/style.css?v={v}"', 1)
     html = html.replace('/static/app.js"', f'/static/app.js?v={v}"', 1)
     return html
 
 
-def _pin_page_html(error: bool = False) -> str:
-    error_html = '<p class="pin-error">Wrong PIN — try again.</p>' if error else ''
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Story Buddy</title>
-  <link rel="stylesheet" href="/static/style.css?v={_asset_version()}"/>
-</head>
-<body>
-  <div class="pin-gate">
-    <div class="pin-box">
-      <div class="pin-logo">📖</div>
-      <h1>Story Buddy</h1>
-      <p>Enter the family PIN to start writing.</p>
-      <form method="post" action="/api/verify-pin">
-        <input name="pin" type="text" placeholder="PIN"
-               autocomplete="off" maxlength="12" autofocus/>
-        <button type="submit" class="btn-primary">Let's go</button>
-      </form>
-      {error_html}
-    </div>
-  </div>
-</body>
-</html>"""
-
-
 @app.get("/", response_class=HTMLResponse)
-def pin_page(error: str = ""):
-    return HTMLResponse(_pin_page_html(error == "1"))
-
-
-@app.get("/app", response_class=HTMLResponse)
 def serve_app():
     return HTMLResponse(_app_html())
-
-
-@app.post("/api/verify-pin")
-@limiter.limit("10/minute")
-async def verify_pin(request: Request, pin: str = Form(...)):
-    if pin.strip() != APP_PIN.strip():
-        return RedirectResponse("/?error=1", status_code=303)
-    response = RedirectResponse("/app", status_code=303)
-    response.set_cookie(
-        key="sb_verified", value="1",
-        path="/",
-        httponly=True, samesite="lax", secure=True,
-        max_age=60 * 60 * 24 * 30,   # 30 days
-    )
-    return response
 
 
 @app.post("/api/chat", response_model=ChatResponse)

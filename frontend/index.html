@@ -8,21 +8,8 @@
 </head>
 <body>
 
-  <!-- ── PIN gate ──────────────────────────────────────────────────────── -->
-  <div id="pin-gate" class="pin-gate">
-    <div class="pin-box">
-      <div class="pin-logo">📖</div>
-      <h1>Story Buddy</h1>
-      <p>Enter the family PIN to start writing.</p>
-      <input id="pin-input" type="password" inputmode="numeric"
-             placeholder="PIN" autocomplete="off" maxlength="12" />
-      <button id="pin-submit" class="btn-primary">Let's go</button>
-      <p id="pin-error" class="pin-error" hidden>Wrong PIN — try again.</p>
-    </div>
-  </div>
-
-  <!-- ── Main app (hidden until PIN passes) ────────────────────────────── -->
-  <div id="app" class="app" hidden>
+  <!-- ── Main app ──────────────────────────────────────────────────────── -->
+  <div id="app" class="app">
 
     <!-- ── Left panel: writing document ─────────────────────────────── -->
     <section class="panel panel-doc" aria-label="Your story">
