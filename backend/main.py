@@ -1,5 +1,9 @@
 import json
 import os
+import sqlite3
+import time
+import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -21,6 +25,12 @@ SYSTEM_PROMPT      = (Path(__file__).parent / "system_prompt.md").read_text()
 FRONTEND_DIR       = Path(__file__).parent.parent / "frontend"
 MODEL              = "claude-sonnet-5"
 
+# On Railway, set DB_PATH to a path inside a mounted Volume (e.g. /data/stories.db)
+# so stories survive redeploys. Without a volume, Railway's filesystem is wiped on
+# every deploy. Locally this defaults to a file next to this script.
+DB_PATH = Path(os.environ.get("DB_PATH", str(Path(__file__).parent / "data" / "stories.db")))
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 # Origins allowed to call the API. In production set ALLOWED_ORIGIN to your
 # deployed URL (e.g. https://storybuddy.up.railway.app). Locally stays open.
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
@@ -38,6 +48,37 @@ app.add_middleware(
 )
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
+
+
+# ── Database ────────────────────────────────────────────────────────────────
+
+@contextmanager
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def init_db():
+    with get_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS stories (
+                id            TEXT PRIMARY KEY,
+                title         TEXT NOT NULL DEFAULT '',
+                body          TEXT NOT NULL DEFAULT '',
+                mode          TEXT NOT NULL DEFAULT 'brainstorm',
+                chat_history  TEXT NOT NULL DEFAULT '[]',
+                story_bible   TEXT NOT NULL DEFAULT '{}',
+                updated_at    INTEGER NOT NULL
+            )
+        """)
+
+
+init_db()
 
 TOOLS = [
     {
@@ -153,6 +194,32 @@ class ChatResponse(BaseModel):
     suggestion: Optional[str] = None
 
 
+# ── Story persistence models ───────────────────────────────────────────────────
+
+class StorySummary(BaseModel):
+    id: str
+    title: str
+    updated_at: int
+
+
+class StoryOut(BaseModel):
+    id: str
+    title: str
+    body: str
+    mode: str
+    chat_history: list[Message]
+    story_bible: StoryBible
+    updated_at: int
+
+
+class StorySave(BaseModel):
+    title: str = ""
+    body: str = ""
+    mode: str = "brainstorm"
+    chat_history: list[Message] = []
+    story_bible: StoryBible = StoryBible()
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def build_system_prompt(mode: str, story_bible: StoryBible, story_body: str = "") -> str:
@@ -249,6 +316,81 @@ def _app_html() -> str:
 @app.get("/", response_class=HTMLResponse)
 def serve_app():
     return HTMLResponse(_app_html())
+
+
+def _row_to_story(row: sqlite3.Row) -> StoryOut:
+    return StoryOut(
+        id=row["id"],
+        title=row["title"],
+        body=row["body"],
+        mode=row["mode"],
+        chat_history=json.loads(row["chat_history"]),
+        story_bible=json.loads(row["story_bible"]),
+        updated_at=row["updated_at"],
+    )
+
+
+@app.get("/api/stories", response_model=list[StorySummary])
+def list_stories():
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, title, updated_at FROM stories ORDER BY updated_at DESC"
+        ).fetchall()
+    return [StorySummary(id=r["id"], title=r["title"], updated_at=r["updated_at"]) for r in rows]
+
+
+@app.get("/api/stories/{story_id}", response_model=StoryOut)
+def get_story(story_id: str):
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM stories WHERE id = ?", (story_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Story not found")
+    return _row_to_story(row)
+
+
+@app.post("/api/stories", response_model=StoryOut)
+def create_story():
+    story_id = uuid.uuid4().hex
+    now = int(time.time() * 1000)
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO stories (id, title, body, mode, chat_history, story_bible, updated_at) "
+            "VALUES (?, '', '', 'brainstorm', '[]', ?, ?)",
+            (story_id, StoryBible().model_dump_json(), now),
+        )
+    return get_story(story_id)
+
+
+@app.put("/api/stories/{story_id}", response_model=StoryOut)
+def save_story(story_id: str, body: StorySave):
+    now = int(time.time() * 1000)
+    with get_db() as conn:
+        existing = conn.execute("SELECT id FROM stories WHERE id = ?", (story_id,)).fetchone()
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Story not found")
+        conn.execute(
+            "UPDATE stories SET title = ?, body = ?, mode = ?, chat_history = ?, "
+            "story_bible = ?, updated_at = ? WHERE id = ?",
+            (
+                body.title,
+                body.body,
+                body.mode,
+                json.dumps([m.model_dump() for m in body.chat_history]),
+                body.story_bible.model_dump_json(),
+                now,
+                story_id,
+            ),
+        )
+    return get_story(story_id)
+
+
+@app.delete("/api/stories/{story_id}")
+def delete_story(story_id: str):
+    with get_db() as conn:
+        cursor = conn.execute("DELETE FROM stories WHERE id = ?", (story_id,))
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Story not found")
+    return {"ok": True}
 
 
 @app.post("/api/chat", response_model=ChatResponse)

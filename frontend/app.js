@@ -1,7 +1,7 @@
 // ── Config ────────────────────────────────────────────────────────────────
-const API_BASE      = '';
-const STORIES_KEY   = 'storybuddy_stories';
-const CURRENT_KEY   = 'storybuddy_current';
+const API_BASE       = '';
+const LAST_OPEN_KEY  = 'storybuddy_last_open';   // which story to reopen — a local UI preference, not the data itself
+const LEGACY_STORIES_KEY = 'storybuddy_stories'; // old localStorage story data, migrated to the server once
 
 // ── State ─────────────────────────────────────────────────────────────────
 let currentMode = 'brainstorm';
@@ -30,48 +30,37 @@ const exportBtn         = document.getElementById('export-btn');
 const exportMenu        = document.getElementById('export-menu');
 const micBtn            = document.getElementById('mic-btn');
 
-// ── Multi-story storage ───────────────────────────────────────────────────
-function genId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+// ── Backend story API ────────────────────────────────────────────────────
+async function apiListStories() {
+  const res = await fetch(`${API_BASE}/api/stories`);
+  if (!res.ok) throw new Error(`Failed to list stories (${res.status})`);
+  return res.json();
 }
 
-function storageAvailable() {
-  try {
-    const testKey = '__storybuddy_test__';
-    localStorage.setItem(testKey, '1');
-    localStorage.removeItem(testKey);
-    return true;
-  } catch (err) {
-    console.error('localStorage unavailable:', err);
-    return false;
-  }
+async function apiGetStory(id) {
+  const res = await fetch(`${API_BASE}/api/stories/${id}`);
+  if (!res.ok) return null;
+  return res.json();
 }
 
-function loadAllStories() {
-  try { return JSON.parse(localStorage.getItem(STORIES_KEY)) || {}; }
-  catch (err) { console.error('Failed to load stories:', err); return {}; }
+async function apiCreateStory() {
+  const res = await fetch(`${API_BASE}/api/stories`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Failed to create story (${res.status})`);
+  return res.json();
 }
 
-function saveAllStories(stories) {
-  try {
-    localStorage.setItem(STORIES_KEY, JSON.stringify(stories));
-    return true;
-  } catch (err) {
-    console.error('Failed to save stories:', err);
-    return false;
-  }
+async function apiSaveStory(id, data) {
+  const res = await fetch(`${API_BASE}/api/stories/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.ok;
 }
 
-function buildBlankStory() {
-  return {
-    id: genId(),
-    title: '',
-    body: '',
-    mode: 'brainstorm',
-    chatHistory: [],
-    storyBible: { characters: [], settings: [], problems: [], plot_beats: [], writer_tip: null },
-    updatedAt: Date.now(),
-  };
+async function apiDeleteStory(id) {
+  const res = await fetch(`${API_BASE}/api/stories/${id}`, { method: 'DELETE' });
+  return res.ok;
 }
 
 // Old saves stored a single `character`/`setting`/`problem` string each.
@@ -97,32 +86,38 @@ function migrateStoryBible(bible) {
   return b;
 }
 
-// Cross-tab mutex around the storage read-modify-write cycle. Without this,
-// two tabs saving around the same time can race: both read the same stale
-// snapshot, and whichever writes last silently drops the other tab's story.
-function withStoriesLock(fn) {
-  if (navigator.locks) {
-    return navigator.locks.request(STORIES_KEY, fn);
+// One-time migration: if this browser has old localStorage stories and the
+// server has none yet, upload them so nothing from before the backend
+// database existed gets lost.
+async function migrateLocalStoriesIfNeeded() {
+  let local;
+  try { local = JSON.parse(localStorage.getItem(LEGACY_STORIES_KEY)); } catch { local = null; }
+  if (!local || !Object.keys(local).length) return;
+
+  const remoteSummaries = await apiListStories();
+  if (remoteSummaries.length) return; // server already has data — don't duplicate
+
+  for (const s of Object.values(local)) {
+    const created = await apiCreateStory();
+    await apiSaveStory(created.id, {
+      title: s.title || '',
+      body: s.body || '',
+      mode: s.mode || 'brainstorm',
+      chat_history: s.chatHistory || [],
+      story_bible: migrateStoryBible(s.storyBible),
+    });
   }
-  return fn();
+  try { localStorage.removeItem(LEGACY_STORIES_KEY); } catch {}
 }
 
 async function saveCurrentStory() {
   if (!currentStoryId) return false;
-  return withStoriesLock(() => {
-    const stories = loadAllStories();
-    stories[currentStoryId] = {
-      id: currentStoryId,
-      title: storyTitle.value,
-      body: storyBody.value,
-      mode: currentMode,
-      chatHistory,
-      storyBible,
-      updatedAt: Date.now(),
-    };
-    const ok = saveAllStories(stories);
-    try { localStorage.setItem(CURRENT_KEY, currentStoryId); } catch (err) { console.error(err); }
-    return ok;
+  return apiSaveStory(currentStoryId, {
+    title: storyTitle.value,
+    body: storyBody.value,
+    mode: currentMode,
+    chat_history: chatHistory,
+    story_bible: storyBible,
   });
 }
 
@@ -131,8 +126,8 @@ function loadStory(story) {
   storyTitle.value = story.title || '';
   storyBody.value  = story.body  || '';
   currentMode      = story.mode  || 'brainstorm';
-  storyBible       = migrateStoryBible(story.storyBible);
-  chatHistory      = story.chatHistory || [];
+  storyBible       = migrateStoryBible(story.story_bible);
+  chatHistory      = story.chat_history || [];
 
   // Reset UI
   document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -168,22 +163,28 @@ function loadStory(story) {
     appendMessage('buddy', 'Hi! I\'m your story buddy. What kind of story do you want to make today?');
   }
 
-  try { localStorage.setItem(CURRENT_KEY, currentStoryId); } catch {}
+  try { localStorage.setItem(LAST_OPEN_KEY, currentStoryId); } catch {}
   updateWordCount();
 }
 
-function renderStoriesList() {
-  const stories = loadAllStories();
-  const sorted  = Object.values(stories).sort((a, b) => b.updatedAt - a.updatedAt);
+async function renderStoriesList() {
+  storiesList.innerHTML = '<li class="stories-empty">Loading…</li>';
+  let summaries;
+  try {
+    summaries = await apiListStories();
+  } catch (err) {
+    storiesList.innerHTML = '<li class="stories-empty">Could not load stories. Check your connection.</li>';
+    return;
+  }
   storiesList.innerHTML = '';
-  if (!sorted.length) {
+  if (!summaries.length) {
     storiesList.innerHTML = '<li class="stories-empty">No saved stories yet.</li>';
     return;
   }
-  sorted.forEach(s => {
+  summaries.sort((a, b) => b.updated_at - a.updated_at).forEach(s => {
     const li   = document.createElement('li');
     li.className = 'story-item' + (s.id === currentStoryId ? ' current' : '');
-    const date = new Date(s.updatedAt).toLocaleDateString(undefined, { month:'short', day:'numeric' });
+    const date = new Date(s.updated_at).toLocaleDateString(undefined, { month:'short', day:'numeric' });
     li.innerHTML = `
       <button class="story-item-load" data-id="${s.id}">
         <span class="story-item-title">${s.title || 'Untitled story'}</span>
@@ -195,28 +196,30 @@ function renderStoriesList() {
 }
 
 // ── Startup ───────────────────────────────────────────────────────────────
-(function init() {
-  if (!storageAvailable()) {
-    showStorageWarning();
-  }
-  const stories = loadAllStories();
-  const savedId = localStorage.getItem(CURRENT_KEY);
-  if (savedId && stories[savedId]) {
-    loadStory(stories[savedId]);
-  } else {
-    const vals = Object.values(stories);
-    if (vals.length) {
-      const latest = vals.sort((a, b) => b.updatedAt - a.updatedAt)[0];
-      loadStory(latest);
-    } else {
-      const blank = buildBlankStory();
-      withStoriesLock(() => {
-        const all = loadAllStories();
-        all[blank.id] = blank;
-        saveAllStories(all);
-      });
-      loadStory(blank);
+(async function init() {
+  try {
+    await migrateLocalStoriesIfNeeded();
+
+    const lastId = localStorage.getItem(LAST_OPEN_KEY);
+    let story = lastId ? await apiGetStory(lastId) : null;
+
+    if (!story) {
+      const summaries = await apiListStories();
+      if (summaries.length) {
+        const latestId = summaries.sort((a, b) => b.updated_at - a.updated_at)[0].id;
+        story = await apiGetStory(latestId);
+      }
     }
+
+    if (!story) {
+      story = await apiCreateStory();
+    }
+
+    loadStory(story);
+  } catch (err) {
+    console.error('Startup failed:', err);
+    chatMessages.innerHTML = '';
+    appendMessage('buddy', "Hmm, I couldn't reach the server to load your stories. Check your connection and reload the page.");
   }
 })();
 
@@ -229,24 +232,13 @@ function triggerSave() {
     const ok = await saveCurrentStory();
     if (ok) {
       saveIndicator.textContent = 'Saved';
+      saveIndicator.style.color = '';
       setTimeout(() => { saveIndicator.textContent = ''; }, 2000);
     } else {
       saveIndicator.textContent = '⚠ Not saved!';
       saveIndicator.style.color = '#c0392b';
-      showStorageWarning();
     }
   }, 800);
-}
-
-function showStorageWarning() {
-  if (document.getElementById('storage-warning')) return;
-  const banner = document.createElement('div');
-  banner.id = 'storage-warning';
-  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#c0392b;color:#fff;' +
-    'text-align:center;padding:10px;font-family:sans-serif;font-size:14px;z-index:9999;';
-  banner.textContent = "Your browser is blocking saving, so your story won't be kept. " +
-    'Check your browser\'s privacy/cookie settings for this site, or try a different browser.';
-  document.body.prepend(banner);
 }
 
 // ── Stories drawer ────────────────────────────────────────────────────────
@@ -262,13 +254,8 @@ storiesBtn.addEventListener('click', () => {
 
 newStoryBtn.addEventListener('click', async () => {
   await saveCurrentStory();
-  const blank = buildBlankStory();
-  await withStoriesLock(() => {
-    const stories = loadAllStories();
-    stories[blank.id] = blank;
-    saveAllStories(stories);
-  });
-  loadStory(blank);
+  const created = await apiCreateStory();
+  loadStory(created);
   storiesDrawer.hidden = true;
 });
 
@@ -280,37 +267,26 @@ storiesList.addEventListener('click', async e => {
     const id = loadBtn.dataset.id;
     if (id === currentStoryId) { storiesDrawer.hidden = true; return; }
     await saveCurrentStory();
-    const stories = loadAllStories();
-    if (stories[id]) loadStory(stories[id]);
+    const story = await apiGetStory(id);
+    if (story) loadStory(story);
     storiesDrawer.hidden = true;
   }
 
   if (delBtn) {
     const id = delBtn.dataset.id;
-    const stories = loadAllStories();
-    const title = stories[id]?.title || 'Untitled story';
+    const row = delBtn.closest('.story-item');
+    const title = row?.querySelector('.story-item-title')?.textContent || 'Untitled story';
     if (!confirm(`Delete "${title}"? This can't be undone.`)) return;
 
-    let remaining;
-    await withStoriesLock(() => {
-      const current = loadAllStories();
-      delete current[id];
-      remaining = current;
-      saveAllStories(current);
-    });
+    await apiDeleteStory(id);
 
     if (id === currentStoryId) {
-      const vals = Object.values(remaining);
-      if (vals.length) {
-        loadStory(vals.sort((a, b) => b.updatedAt - a.updatedAt)[0]);
+      const summaries = await apiListStories();
+      if (summaries.length) {
+        const latestId = summaries.sort((a, b) => b.updated_at - a.updated_at)[0].id;
+        loadStory(await apiGetStory(latestId));
       } else {
-        const blank = buildBlankStory();
-        await withStoriesLock(() => {
-          const stories = loadAllStories();
-          stories[blank.id] = blank;
-          saveAllStories(stories);
-        });
-        loadStory(blank);
+        loadStory(await apiCreateStory());
       }
     }
     renderStoriesList();
